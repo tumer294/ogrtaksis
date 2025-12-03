@@ -87,7 +87,7 @@ export function useWeeklySchedule(userId?: string) {
   }, [userId, toast]);
 
 
-  const updateLesson = async (day: Day, lesson: Lesson | null, lessonSlot: number) => {
+  const updateLesson = async (day: Day, lessonData: Omit<Lesson, 'id' | 'lessonSlot'> | null, lessonSlot: number) => {
     if (!userId) return;
 
     const scheduleDocRef = doc(db, `users/${userId}/schedules`, scheduleDocId);
@@ -98,34 +98,40 @@ export function useWeeklySchedule(userId?: string) {
         const dayLessons: Lesson[] = currentData[day] || [];
         
         let updatedLessons: Lesson[];
+        const existingLessonIndex = dayLessons.findIndex(l => l.lessonSlot === lessonSlot);
 
-        const existingIndex = dayLessons.findIndex(l => l.lessonSlot === lessonSlot);
-
-        if (lesson) {
-             const lessonToSave = { ...lesson };
-             // Ensure planId is either a string or removed if empty/undefined
-             if (!lessonToSave.planId) {
-                delete lessonToSave.planId;
-             }
-
-             if (existingIndex > -1) {
+        if (lessonData) { // Add or update a lesson
+            if (existingLessonIndex > -1) {
+                // Update existing lesson: merge old data with new data from form
+                const existingLesson = dayLessons[existingLessonIndex];
+                const updatedLesson = {
+                    ...existingLesson, // Keep old properties like id
+                    ...lessonData,      // Overwrite with new form data
+                    lessonSlot,
+                    time: settings.timeSlots[lessonSlot] || '',
+                };
                 updatedLessons = [...dayLessons];
-                updatedLessons[existingIndex] = lessonToSave;
-             } else {
-                updatedLessons = [...dayLessons, lessonToSave];
-             }
-        } else {
-            if (existingIndex > -1) {
+                updatedLessons[existingLessonIndex] = updatedLesson;
+            } else {
+                // Add new lesson
+                const newLesson: Lesson = {
+                    id: `${day}-${lessonSlot}-${new Date().getTime()}`,
+                    lessonSlot,
+                    time: settings.timeSlots[lessonSlot] || '',
+                    ...lessonData,
+                };
+                updatedLessons = [...dayLessons, newLesson];
+            }
+        } else { // Clear a lesson
+            if (existingLessonIndex > -1) {
                  updatedLessons = dayLessons.filter(l => l.lessonSlot !== lessonSlot);
             } else {
-                // Nothing to remove
-                return;
+                return; // Nothing to clear
             }
         }
 
-        await updateDoc(scheduleDocRef, {
-            [day]: updatedLessons
-        });
+        await updateDoc(scheduleDocRef, { [day]: updatedLessons });
+
     } catch (error) {
          console.error("Error updating lesson:", error);
          toast({

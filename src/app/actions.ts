@@ -12,6 +12,11 @@ import { generateIndividualReport } from '@/ai/flows/individual-student-report-f
 import type { IndividualStudentReportInput, IndividualStudentReportOutput } from '@/ai/flows/individual-student-report-flow';
 import { generateClassReport } from '@/ai/flows/class-report-flow.ts';
 import type { ClassReportInput, ClassReportOutput } from '@/ai/flows/class-report-flow.ts';
+import { generateForumAnswer } from '@/ai/flows/forum-assistant-flow';
+import type { ForumAssistantInput } from '@/ai/flows/forum-assistant-flow';
+import type { ForumAuthor, ForumReply } from '@/lib/types';
+import { db } from '@/lib/firebase';
+import { addDoc, collection } from 'firebase/firestore';
 
 
 export async function generateDescriptionAction(input: DescriptionAutoFillInput) {
@@ -102,5 +107,40 @@ export async function generateClassReportAction(input: ClassReportInput): Promis
   } catch (error) {
     console.error('AI class report generation failed:', error);
     return { error: 'Yapay zeka ile sınıf raporu üretilirken bir hata oluştu.' };
+  }
+}
+
+
+export async function addReplyAction(postId: string, replyData: { author: ForumAuthor, content: string }) {
+    if (!replyData.author || !replyData.content) {
+        return { success: false, error: 'Cevap içeriği veya yazar bilgisi eksik.' };
+    }
+    try {
+        await addDoc(collection(db, `forum/${postId}/replies`), {
+            ...replyData,
+            date: new Date().toISOString(),
+            upvotedBy: [],
+            commentCount: 0,
+        });
+        return { success: true };
+    } catch (error) {
+        console.error("Error adding reply:", error);
+        return { success: false, error: 'Cevap eklenirken bir hata oluştu.' };
+    }
+}
+
+
+export async function generateStandaloneAiAnswerAction(input: ForumAssistantInput): Promise<{ answer: string } | { error: string }> {
+  try {
+    const aiResponse = await generateForumAnswer(input);
+    
+    if (!aiResponse || !aiResponse.answer) {
+        throw new Error('Yapay zeka bir cevap üretemedi.');
+    }
+    
+    return { answer: aiResponse.answer };
+  } catch (error: any) {
+    console.error('AI forum answer generation failed:', error);
+    return { error: error.message || 'Yapay zeka cevabı oluşturulurken bilinmeyen bir hata oluştu.' };
   }
 }

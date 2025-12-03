@@ -21,6 +21,7 @@ import {
 } from 'firebase/firestore';
 import { useToast } from './use-toast';
 import type { ForumPost, ForumReply, ForumComment, ForumAuthor } from '@/lib/types';
+import { addReplyAction } from '@/app/actions';
 
 
 // Hook to fetch all forum posts
@@ -170,14 +171,12 @@ export const deletePost = async (postId: string) => {
 };
 
 // Function to add a reply
-export const addReply = async (postId: string, replyData: Omit<ForumReply, 'id' | 'date' | 'upvotedBy' | 'commentCount'>) => {
+export const addReply = async (postId: string, author: ForumAuthor, content: string) => {
     try {
-        await addDoc(collection(db, `forum/${postId}/replies`), {
-            ...replyData,
-            date: new Date().toISOString(),
-            upvotedBy: [],
-            commentCount: 0,
-        });
+        const result = await addReplyAction(postId, { author, content });
+        if (!result.success) {
+            throw new Error(result.error);
+        }
         return true;
     } catch (error) {
         console.error("Error adding reply:", error);
